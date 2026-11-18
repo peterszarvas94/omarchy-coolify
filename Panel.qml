@@ -156,6 +156,13 @@ Ui.Panel {
     // The file is created owner-only first; FileView then writes in place, so the
     // token never appears in a process argument and the permissions are kept.
     function save(kind, content) {
+        // FileView skips writing unchanged text, so there would be no saved signal.
+        if (connectionFile.loaded && connectionFile.text() === content) {
+            saving = kind;
+            pendingSave = content;
+            saveFinished(true);
+            return;
+        }
         busy = true;
         saving = kind;
         pendingSave = content;
