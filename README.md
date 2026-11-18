@@ -11,10 +11,26 @@ Uses Omarchy's native panel, controls, typography, theme colors, keyboard focus 
 Requires current Omarchy with its Quickshell plugin system (`qs.Ui.KeyboardPanel`, `PanelHero`, `Button`, and `Commons.Translations`), Go 1.23 or later, and `flock` from util-linux. No Coolify CLI or extra Go dependencies are needed.
 
 ```sh
-omarchy plugin add https://github.com/peterszarvas94/omarchy-coolify --enable
+omarchy plugin add https://github.com/peterszarvas94/omarchy-coolify.git --enable
 ```
 
 The helper compiles into `$XDG_CACHE_HOME/omarchy-coolify` on first use and after source updates. Initial launch may take a few seconds. Build artifacts stay outside the checkout. Keep Go installed for updates. No prebuilt binaries are downloaded or executed.
+
+## Update and remove
+
+```sh
+omarchy plugin update io.github.peterszarvas94.coolify
+```
+
+Updates follow the repository default branch through Omarchy's normal git-based updater. The connection credentials live outside the plugin checkout and survive updates.
+
+Before removing the plugin, open its connection settings and select **Disconnect** to remove the saved URL and token from this computer. Then run:
+
+```sh
+omarchy plugin remove io.github.peterszarvas94.coolify
+```
+
+Removal does not revoke the API token in Coolify. If you remove the plugin without disconnecting first, the private connection file remains at the path documented below. The compiled helper cache may also remain in `~/.cache/omarchy-coolify`; it contains no token.
 
 ## Connect
 
