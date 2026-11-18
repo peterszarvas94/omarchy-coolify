@@ -5,6 +5,13 @@
 
 var ID = /^[A-Za-z0-9_-]{1,128}$/;
 var HISTORY_TAKE = 20;
+// Limits for one refresh run, on top of curl's 4 MiB per response: total
+// response text, projects read for deployment links, environments kept and
+// recently finished deployments kept.
+var RUN_BYTES = 16 * 1024 * 1024;
+var MAX_PROJECTS = 100;
+var MAX_ENVIRONMENTS = 500;
+var MAX_RECENT = 50;
 
 function terminal(status) {
     return status === "finished" || status === "failed" || status === "cancelled-by-user" || status === "skipped";
@@ -80,6 +87,7 @@ function Run(conn, fetch, done) {
     this.done = done;
     this.requests = [];
     this.finished = false;
+    this.bytes = 0;
 }
 Run.prototype.finish = function (error, state) {
     if (this.finished)
@@ -110,8 +118,20 @@ Run.prototype.get = function (path, callback) {
         var index = run.requests.indexOf(request);
         if (index >= 0)
             run.requests.splice(index, 1);
-        if (exit === 63)
-            return callback({ key: "errorTooLarge" });
+        // Too much data ends the whole run, not just this request.
+        // QML strings use UTF-16; count UTF-8 bytes rather than code units.
+        var text = String(body || "");
+        for (var i = 0; i < text.length && run.bytes <= RUN_BYTES; i++) {
+            var code = text.charCodeAt(i);
+            if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length && text.charCodeAt(i + 1) >= 0xdc00 && text.charCodeAt(i + 1) <= 0xdfff) {
+                run.bytes += 4;
+                i++;
+            } else {
+                run.bytes += code < 0x80 ? 1 : code < 0x800 ? 2 : 3;
+            }
+        }
+        if (exit === 63 || run.bytes > RUN_BYTES)
+            return run.finish({ key: "errorTooLarge" });
         if (exit !== 0 || !status)
             return callback({ key: "errorUnreachable" });
         if (status === 401 || status === 403)
@@ -261,7 +281,7 @@ function refresh(conn, fetch, filter, force, done) {
                             return next();
                         }
                         // Coolify returns the newest deployments first.
-                        list(data && data.deployments).forEach(function (raw) {
+                        list(data && data.deployments).slice(0, HISTORY_TAKE).forEach(function (raw) {
                             if (!raw || !ID.test(raw.deployment_uuid || ""))
                                 return;
                             if (raw.application_id !== undefined && raw.application_id !== null)
@@ -269,7 +289,7 @@ function refresh(conn, fetch, filter, force, done) {
                             if (!terminal(raw.status))
                                 return;
                             var d = decorate(raw, app, conn);
-                            if (ended(d) > Date.now() - 120000)
+                            if (ended(d) > Date.now() - 120000 && state.recent.length < MAX_RECENT)
                                 state.recent.push(d);
                             if (!state.last || ended(d) > ended(state.last))
                                 state.last = d;
@@ -289,14 +309,17 @@ function refresh(conn, fetch, filter, force, done) {
 function enrich(run, apps, done) {
     run.get("/projects", function (error, projectData) {
         var projects = error ? [] : list(projectData).filter(function (p) { return p && ID.test(p.uuid || ""); });
-        if (projects.length > 200)
+        if (projects.length > MAX_PROJECTS)
             projects = [];
         var environments = {};
+        var environmentCount = 0;
         each(projects, function (project, next) {
             run.get("/projects/" + project.uuid, function (error, details) {
                 list(details && details.environments).forEach(function (env) {
-                    if (env && ID.test(env.uuid || ""))
-                        environments[String(env.id)] = { project: project.uuid, uuid: env.uuid, name: env.name };
+                    if (!env || !ID.test(env.uuid || "") || environments[String(env.id)] || environmentCount >= MAX_ENVIRONMENTS)
+                        return;
+                    environmentCount++;
+                    environments[String(env.id)] = { project: project.uuid, uuid: env.uuid, name: cut(env.name, 128) };
                 });
                 next();
             });

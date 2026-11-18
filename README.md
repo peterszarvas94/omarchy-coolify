@@ -42,10 +42,12 @@ Select **Disconnect** before removing to delete the saved token, and revoke it i
 
 ```sh
 omarchy plugin validate .
-mkdir -p /tmp/omarchy-coolify-imports/qs
-ln -sfn /usr/share/omarchy/shell/Commons /tmp/omarchy-coolify-imports/qs/Commons
-ln -sfn /usr/share/omarchy/shell/Ui /tmp/omarchy-coolify-imports/qs/Ui
-/usr/lib/qt6/bin/qmllint --missing-property info -I /tmp/omarchy-coolify-imports -I /usr/lib/qt6/qml *.qml
+imports=$(mktemp -d)
+mkdir "$imports/qs"
+ln -s /usr/share/omarchy/shell/Commons "$imports/qs/Commons"
+ln -s /usr/share/omarchy/shell/Ui "$imports/qs/Ui"
+/usr/lib/qt6/bin/qmllint --missing-property info -I "$imports" -I /usr/lib/qt6/qml *.qml
+rm -r "$imports"
 ```
 
 Copy the checkout into `~/.config/omarchy/plugins/io.github.peterszarvas94.coolify` and run `omarchy restart shell` to try changes.

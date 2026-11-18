@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 — 2026-11-18
+
+- Each refresh reads at most 16 MiB of responses in total, besides the 4 MiB limit per response, and stops with an error when Coolify returns more.
+- At most 100 projects and 500 environments are read for deployment links, 20 history entries per application are kept, and at most 50 recently finished deployments are kept for notifications.
+- The README lint setup uses a private `mktemp -d` directory instead of a fixed path under `/tmp`.
+
 ## 0.3.1 — 2026-11-18
 
 - API requests run through `curl` with redirects refused, so the token is never sent outside the configured Coolify origin.
