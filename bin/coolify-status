@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+cache="${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-coolify"
+mkdir -p "$cache"
+exec 9>"$cache/build.lock"
+flock 9
+if [[ ! -x "$cache/coolify-status" || "$root/cmd/coolify-status/main.go" -nt "$cache/coolify-status" ]]; then
+  cd "$root"
+  go build -trimpath -o "$cache/coolify-status.new" ./cmd/coolify-status
+  mv "$cache/coolify-status.new" "$cache/coolify-status"
+fi
+flock -u 9
+exec "$cache/coolify-status" "$@"

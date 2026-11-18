@@ -1,0 +1,10 @@
+{
+ "connection": "Connection", "deploying": "Deploying", "deployments": "Deployments", "refreshing": "Checking…",
+ "setupHelp": "Connect your Coolify instance with an API token that has read permission. The token only sees its own team and allowed resources.",
+ "keepToken": "API token (leave blank to keep current)", "apiToken": "Coolify API token", "connect": "Save & connect", "forget": "Disconnect",
+ "privacy": "Saved only on this computer with owner-only file permissions. Never stored in shell settings. Only HTTPS connections are accepted, except localhost.",
+ "createToken": "Create a read-only token ↗", "ongoing": "ONGOING", "lastFinished": "LAST FINISHED", "noActive": "No deployments running. All quiet.",
+ "noHistory": "No finished deployment found.", "stale": "Showing the last known result. Data may be out of date.",
+ "background": "Background refresh", "pollHelp": "Every 30 seconds; every 5 seconds while deploying.", "checked": "Last checked %1", "notChecked": "Not checked yet",
+ "refresh": "Refresh", "openCoolify": "Open Coolify ↗", "invalidResponse": "Could not read the deployment status.", "helperError": "Could not start the helper. Install Go and check the plugin installation."
+}

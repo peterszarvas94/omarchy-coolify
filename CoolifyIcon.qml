@@ -1,0 +1,42 @@
+import QtQuick
+import qs.Commons
+import qs.Commons as Commons
+
+Item {
+    id: root
+    property color foreground: Commons.Color.foreground
+    property string status: "idle"
+    implicitWidth: Style.space(24)
+    implicitHeight: implicitWidth
+    // Official monochrome SVG path, painted directly in the current theme color.
+    Image {
+        anchors.fill: parent
+        sourceSize.width: width * Screen.devicePixelRatio
+        sourceSize.height: height * Screen.devicePixelRatio
+        source: "data:image/svg+xml," + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 352 352"><path fill="' + root.foreground + '" d="M63.996 64V0h256v64Zm0 192h-64V64h64Zm0 0h256v64h-256Zm32-160V71.067h231.066V32h24.934v64zm0 0v152.533H71.063V96ZM56.93 263.066V288H31.997v-24.934ZM351.996 352h-256v-24.934h231.066V288h24.934z"/></svg>')
+    }
+    Rectangle {
+        id: statusBadge
+        visible: root.status !== "idle"
+        width: Math.max(4, root.width * 0.28)
+        height: width
+        radius: width / 2
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        color: root.status === "failed" || root.status === "offline" ? Commons.Color.urgent : root.foreground
+        SequentialAnimation on opacity {
+            running: root.status === "active" && Style.duration(1000) > 0
+            loops: Animation.Infinite
+            onRunningChanged: if (!running)
+                statusBadge.opacity = 1
+            NumberAnimation {
+                to: 0.25
+                duration: Style.duration(700)
+            }
+            NumberAnimation {
+                to: 1
+                duration: Style.duration(700)
+            }
+        }
+    }
+}
