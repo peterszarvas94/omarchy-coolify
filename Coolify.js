@@ -386,3 +386,6 @@ function duration(d) {
 function escapeMarkup(text) {
     return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
+
+// Shared by every monitor until the current notification closes.
+var alertPending = false;

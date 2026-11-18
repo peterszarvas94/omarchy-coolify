@@ -203,8 +203,10 @@ Ui.Panel {
         notifyKey = key;
         notifyWasEnabled = notificationsEnabled;
         var events = Coolify.transitions(key, next, silent);
-        for (var i = 0; i < events.length; i++)
-            showNotification(events[i]);
+        if (!events.length || Coolify.alertPending)
+            return;
+        var event = events.find(function (d) { return d.status === "failed"; }) || events[0];
+        showNotification(event);
     }
     function showNotification(d) {
         var titles = {
@@ -217,10 +219,12 @@ Ui.Panel {
         var took = Coolify.terminal(d.status) ? Coolify.duration(d) : "";
         if (took)
             body += "\n" + t("notificationDuration").arg(took);
-        notifier.createObject(root, {
+        Coolify.alertPending = true;
+        if (!notifier.createObject(root, {
             link: d.deployment_url,
-            command: ["notify-send", "--app-name=Coolify Deployments", "--urgency=" + (d.status === "failed" ? "critical" : "normal"), "--action=default=" + t("notificationOpen"), "--icon=" + iconPath, "--", Coolify.escapeMarkup(t(titles[d.status] || "notificationStarted")), Coolify.escapeMarkup(body)]
-        });
+            command: ["notify-send", "--wait", "--app-name=Coolify Deployments", "--urgency=" + (d.status === "failed" ? "critical" : "normal"), "--action=default=" + t("notificationOpen"), "--icon=" + iconPath, "--", Coolify.escapeMarkup(t(titles[d.status] || "notificationStarted")), Coolify.escapeMarkup(body)]
+        }))
+            Coolify.alertPending = false;
     }
     function updateSetting(name, value) {
         if (!root.bar || !root.bar.shell)
@@ -353,6 +357,7 @@ Ui.Panel {
                         Qt.openUrlExternally(notification.link);
                 }
             }
+            Component.onDestruction: Coolify.alertPending = false
             onExited: notification.destroy()
         }
     }
