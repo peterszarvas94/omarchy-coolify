@@ -4,7 +4,9 @@ Ongoing deployments and the last finished result, in your Omarchy bar. A read-on
 
 Uses Omarchy's native panel, controls, typography, theme colors, keyboard focus and reduced-motion preference. The Coolify mark follows your bar color; a pulsing badge indicates activity and a warning badge indicates failure or a connection error.
 
-![Ongoing deployment and last finished result](docs/screenshots/deploying.png)
+![Deployment status and connection settings with demo data](preview.png)
+
+Full-size screenshots: [Deployments](docs/screenshots/readme-deployments.png) · [Connection settings](docs/screenshots/readme-settings.png).
 
 ## Install
 
