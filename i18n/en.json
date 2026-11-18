@@ -21,8 +21,6 @@
   "notChecked": "Not checked yet",
   "refresh": "Refresh",
   "openCoolify": "Open Coolify ↗",
-  "invalidResponse": "Could not read the deployment status.",
-  "helperError": "Could not start the helper. Install Go and check the plugin installation.",
   "notifications": "Deployment notifications",
   "notificationsHelp": "Starts and results. Automatic detection requires background refresh.",
   "notificationStarted": "Deployment started",
@@ -31,5 +29,16 @@
   "notificationCancelled": "Deployment cancelled",
   "notificationSkipped": "Deployment skipped",
   "notificationDuration": "Duration: %1",
-  "notificationOpen": "Open deployment"
+  "notificationOpen": "Open deployment",
+  "errorUrl": "Enter a valid Coolify URL without credentials, query or fragment.",
+  "errorHttps": "Use HTTPS. Plain HTTP is allowed only on localhost.",
+  "errorToken": "Enter a valid Coolify API token.",
+  "errorUnreachable": "Cannot reach Coolify. Check the URL, network and TLS certificate.",
+  "errorAccess": "Access denied. Check the token's read permission, team and API access.",
+  "errorHttp": "Coolify returned HTTP %1.",
+  "errorResponse": "Unexpected Coolify response. Check the instance URL and API version.",
+  "errorTooMany": "More than 200 applications; narrow the API token's scope.",
+  "errorSave": "Could not save the connection file.",
+  "warnHistory": "Some deployment history is unavailable.",
+  "warnFilter": "Some watched application UUIDs are not visible to this token."
 }
