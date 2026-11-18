@@ -24,6 +24,7 @@ Ui.Panel {
     property string pending: ""
     property double now: Date.now()
     readonly property var active: state.active || []
+    readonly property bool notificationsEnabled: setting("notifications", true)
     readonly property bool autoRefresh: setting("backgroundRefresh", true)
     readonly property string filter: String(setting("applicationUUIDs", ""))
     readonly property bool failed: state.last && state.last.status === "failed"
@@ -44,7 +45,17 @@ Ui.Panel {
             action: action,
             url: url || "",
             token: token || "",
-            filter: filter
+            filter: filter,
+            notifications: notificationsEnabled,
+            notificationLabels: {
+                notificationStarted: t("notificationStarted"),
+                notificationSucceeded: t("notificationSucceeded"),
+                notificationFailed: t("notificationFailed"),
+                notificationCancelled: t("notificationCancelled"),
+                notificationSkipped: t("notificationSkipped"),
+                notificationDuration: t("notificationDuration"),
+                notificationOpen: t("notificationOpen")
+            }
         }) + "\n";
         if (worker.running) {
             worker.write(pending);
@@ -52,16 +63,20 @@ Ui.Panel {
         } else
             worker.running = true;
     }
-    function toggleBackground() {
-        if (!root.state.configured || !root.bar || !root.bar.shell)
+    function updateSetting(name, value) {
+        if (!root.bar || !root.bar.shell)
             return;
         var entry = {
             id: root.moduleName
         };
         for (var key in root.settings)
             entry[key] = root.settings[key];
-        entry.backgroundRefresh = !root.autoRefresh;
+        entry[name] = value;
         root.bar.shell.updateEntryInline(root.moduleName, entry);
+    }
+    function toggleBackground() {
+        if (root.state.configured)
+            root.updateSetting("backgroundRefresh", !root.autoRefresh);
     }
     function refresh() {
         send("refresh");
@@ -308,6 +323,13 @@ Ui.Panel {
                                 if (/^https:\/\/[^\s]+$/.test(u))
                                     root.openLink(u + "/security/api-tokens");
                             }
+                        }
+                        Ui.Toggle {
+                            width: parent.width
+                            label: root.t("notifications")
+                            description: root.t("notificationsHelp")
+                            checked: root.notificationsEnabled
+                            onClicked: root.updateSetting("notifications", !root.notificationsEnabled)
                         }
                     }
                     Column {
