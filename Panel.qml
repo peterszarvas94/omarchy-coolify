@@ -162,7 +162,10 @@ Ui.Panel {
         prepare.running = true;
     }
     function saveFinished(ok) {
+        if (!saving)
+            return;
         var kind = saving;
+        var content = pendingSave;
         saving = "";
         pendingSave = "";
         busy = false;
@@ -174,7 +177,8 @@ Ui.Panel {
             editing = false;
             tokenInput.text = "";
         }
-        connectionFile.reload();
+        // Apply what was written; other bar instances pick it up through the file watch.
+        loadConnection(content);
     }
     function notify(conn, watched, next) {
         var key = conn.url + "\n" + conn.token + "\n" + watched;
