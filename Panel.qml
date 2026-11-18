@@ -7,6 +7,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui as Ui
+import "Coolify.js" as Coolify
 
 Ui.Panel {
     id: root
@@ -16,21 +17,31 @@ Ui.Panel {
     property Item hostWidget: null
     property var state: ({
             configured: false,
+            url: "",
             active: [],
-            last: null
+            last: null,
+            warning: "",
+            checked: ""
         })
+    property var connection: null
+    property var run: null
     property bool busy: false
     property bool editing: false
-    property bool initialized: false
     property string error: ""
-    property string pending: ""
+    property string saving: ""
+    property string pendingSave: ""
     property double now: Date.now()
+    // Notifications stay silent until this instance has a baseline for the current connection.
+    property bool primed: false
+    property string notifyKey: ""
+    property bool notifyWasEnabled: false
     readonly property var active: state.active || []
     readonly property bool notificationsEnabled: setting("notifications", true)
     readonly property bool autoRefresh: setting("backgroundRefresh", true)
     readonly property string filter: String(setting("applicationUUIDs", ""))
-    readonly property bool failed: state.last && state.last.status === "failed"
-    readonly property string helper: Qt.resolvedUrl("bin/coolify-status").toString().replace(/^file:\/\//, "")
+    readonly property bool failed: !!state.last && state.last.status === "failed"
+    readonly property string configDir: (Quickshell.env("XDG_CONFIG_HOME") || Quickshell.env("HOME") + "/.config") + "/omarchy-coolify"
+    readonly property string iconPath: Qt.resolvedUrl("assets/coolify-notification.svg").toString().replace(/^file:\/\//, "")
     Commons.Translations {
         id: strings
         directory: Qt.resolvedUrl("i18n")
@@ -38,32 +49,169 @@ Ui.Panel {
     function t(key) {
         return strings.t(key);
     }
-    function send(action, url, token) {
-        if (busy)
+    function emptyState(configured) {
+        return {
+            configured: configured,
+            url: root.connection ? root.connection.url : "",
+            active: [],
+            last: null,
+            warning: "",
+            checked: ""
+        };
+    }
+    function message(err) {
+        return err.arg === undefined ? t(err.key) : t(err.key).arg(err.arg);
+    }
+    function stopRun() {
+        if (run)
+            run.cancel();
+        run = null;
+        busy = false;
+        runTimeout.stop();
+    }
+    function startRun(next) {
+        run = next;
+        runTimeout.restart();
+    }
+    function refresh(force) {
+        if (busy || !connection)
             return;
+        var conn = connection;
+        var watched = filter;
         busy = true;
         error = "";
-        pending = JSON.stringify({
-            action: action,
-            url: url || "",
-            token: token || "",
-            filter: filter,
-            notifications: notificationsEnabled,
-            notificationLabels: {
-                notificationStarted: t("notificationStarted"),
-                notificationSucceeded: t("notificationSucceeded"),
-                notificationFailed: t("notificationFailed"),
-                notificationCancelled: t("notificationCancelled"),
-                notificationSkipped: t("notificationSkipped"),
-                notificationDuration: t("notificationDuration"),
-                notificationOpen: t("notificationOpen")
+        startRun(Coolify.refresh(conn, watched, force !== false, function (err, next) {
+            root.stopRun();
+            if (err) {
+                root.error = root.message(err);
+                root.primed = false;
+                return;
             }
-        }) + "\n";
-        if (worker.running) {
-            worker.write(pending);
-            pending = "";
-        } else
-            worker.running = true;
+            root.state = next;
+            root.notify(conn, watched, next);
+        }));
+    }
+    function loadConnection(text) {
+        var data = null;
+        try {
+            data = JSON.parse(text);
+        } catch (e) {}
+        var normalized = data ? Coolify.normalizeUrl(data.url) : {};
+        if (!normalized.url || !Coolify.validToken(data.token)) {
+            stopRun();
+            connection = null;
+            primed = false;
+            state = emptyState(false);
+            if (opened)
+                editing = true;
+            return;
+        }
+        if (connection && connection.url === normalized.url && connection.token === data.token)
+            return;
+        stopRun();
+        connection = {
+            url: normalized.url,
+            token: data.token
+        };
+        primed = false;
+        error = "";
+        state = emptyState(true);
+        if (autoRefresh || opened)
+            Qt.callLater(root.refresh);
+    }
+    function connect(urlText, tokenText) {
+        if (busy)
+            return;
+        var normalized = Coolify.normalizeUrl(urlText);
+        if (normalized.error) {
+            error = t(normalized.error);
+            return;
+        }
+        var token = String(tokenText || "").trim();
+        if (!token && connection && connection.url === normalized.url)
+            token = connection.token;
+        if (!Coolify.validToken(token)) {
+            error = t("errorToken");
+            return;
+        }
+        var conn = {
+            url: normalized.url,
+            token: token
+        };
+        busy = true;
+        error = "";
+        startRun(Coolify.verify(conn, function (err) {
+            root.stopRun();
+            if (err) {
+                root.error = root.message(err);
+                return;
+            }
+            root.save("connect", JSON.stringify(conn) + "\n");
+        }));
+    }
+    function forget() {
+        if (!busy)
+            save("forget", "");
+    }
+    // The file is created owner-only first; FileView then writes in place, so the
+    // token never appears in a process argument and the permissions are kept.
+    function save(kind, content) {
+        // FileView skips writing unchanged text, so there would be no saved signal.
+        if (connectionFile.loaded && connectionFile.text() === content) {
+            saving = kind;
+            pendingSave = content;
+            saveFinished(true);
+            return;
+        }
+        busy = true;
+        saving = kind;
+        pendingSave = content;
+        prepare.running = true;
+    }
+    function saveFinished(ok) {
+        if (!saving)
+            return;
+        var kind = saving;
+        var content = pendingSave;
+        saving = "";
+        pendingSave = "";
+        busy = false;
+        if (!ok) {
+            error = t("errorSave");
+            return;
+        }
+        if (kind === "connect") {
+            editing = false;
+            tokenInput.text = "";
+        }
+        // Apply what was written; other bar instances pick it up through the file watch.
+        loadConnection(content);
+    }
+    function notify(conn, watched, next) {
+        var key = conn.url + "\n" + conn.token + "\n" + watched;
+        var silent = !primed || notifyKey !== key || !notifyWasEnabled || !notificationsEnabled || !!next.warning;
+        primed = !next.warning;
+        notifyKey = key;
+        notifyWasEnabled = notificationsEnabled;
+        var events = Coolify.transitions(key, next, silent);
+        for (var i = 0; i < events.length; i++)
+            showNotification(events[i]);
+    }
+    function showNotification(d) {
+        var titles = {
+            "finished": "notificationSucceeded",
+            "failed": "notificationFailed",
+            "cancelled-by-user": "notificationCancelled",
+            "skipped": "notificationSkipped"
+        };
+        var body = d.application_name + (d.environment ? " · " + d.environment : "");
+        var took = Coolify.terminal(d.status) ? Coolify.duration(d) : "";
+        if (took)
+            body += "\n" + t("notificationDuration").arg(took);
+        notifier.createObject(root, {
+            link: d.deployment_url,
+            command: ["notify-send", "--app-name=Coolify Deployments", "--urgency=" + (d.status === "failed" ? "critical" : "normal"), "--action=default=" + t("notificationOpen"), "--icon=" + iconPath, "--", Coolify.escapeMarkup(t(titles[d.status] || "notificationStarted")), Coolify.escapeMarkup(body)]
+        });
     }
     function updateSetting(name, value) {
         if (!root.bar || !root.bar.shell)
@@ -79,9 +227,6 @@ Ui.Panel {
     function toggleBackground() {
         if (root.state.configured)
             root.updateSetting("backgroundRefresh", !root.autoRefresh);
-    }
-    function refresh() {
-        send("refresh");
     }
     function moveFocus(direction) {
         var current = keyCatcher.Window.window ? keyCatcher.Window.window.activeFocusItem : keyCatcher;
@@ -107,18 +252,58 @@ Ui.Panel {
     }
     onOpenedChanged: {
         if (opened) {
-            if (!busy)
-                refresh();
-            if (!state.configured)
+            if (!state.configured) {
                 editing = true;
+                connectionFile.reload();
+            } else if (!busy)
+                refresh();
         } else
             tokenInput.text = "";
     }
-    onFilterChanged: if (initialized)
-        refresh()
-    Component.onCompleted: {
-        initialized = true;
-        send("info");
+    onFilterChanged: refresh()
+    Component.onDestruction: stopRun()
+    FileView {
+        id: connectionFile
+        path: root.configDir + "/connection.json"
+        watchChanges: true
+        atomicWrites: false
+        printErrors: false
+        onLoaded: root.loadConnection(text())
+        onLoadFailed: root.loadConnection("")
+        onFileChanged: reload()
+        onSaved: root.saveFinished(true)
+        onSaveFailed: root.saveFinished(false)
+    }
+    Process {
+        id: prepare
+        command: ["sh", "-c", "umask 077 && mkdir -p \"$1\" && chmod 700 \"$1\" && touch \"$2\" && chmod 600 \"$2\"", "sh", root.configDir, connectionFile.path]
+        onExited: function (code) {
+            if (code === 0)
+                connectionFile.setText(root.pendingSave);
+            else
+                root.saveFinished(false);
+        }
+    }
+    Component {
+        id: notifier
+        Process {
+            id: notification
+            property string link: ""
+            running: true
+            stdout: SplitParser {
+                onRead: function (line) {
+                    if (line.trim() === "default" && notification.link)
+                        Qt.openUrlExternally(notification.link);
+                }
+            }
+            onExited: notification.destroy()
+        }
+    }
+    Timer {
+        id: runTimeout
+        interval: 30000
+        onTriggered: if (root.run)
+            root.run.abort()
     }
     Timer {
         interval: 1000
@@ -130,44 +315,7 @@ Ui.Panel {
         interval: root.error ? 60000 : (root.active.length > 0 ? 5000 : 30000)
         repeat: true
         running: root.state.configured && root.autoRefresh && !root.editing
-        onTriggered: root.send("poll")
-    }
-    Process {
-        id: worker
-        command: [root.helper]
-        stdinEnabled: true
-        onStarted: {
-            write(root.pending);
-            root.pending = "";
-        }
-        stdout: SplitParser {
-            onRead: function (line) {
-                try {
-                    var next = JSON.parse(line);
-                    root.busy = false;
-                    root.error = next.error || "";
-                    if (!next.error) {
-                        root.state = next;
-                        if (next.saved) {
-                            root.editing = false;
-                            tokenInput.text = "";
-                        }
-                        if (!next.checked && next.configured && root.autoRefresh)
-                            Qt.callLater(root.refresh);
-                    }
-                } catch (e) {
-                    root.busy = false;
-                    root.error = root.t("invalidResponse");
-                }
-            }
-        }
-        stderr: StdioCollector {}
-        onExited: function (code, status) {
-            if (root.busy) {
-                root.busy = false;
-                root.error = root.t("helperError");
-            }
-        }
+        onTriggered: root.refresh(false)
     }
     Ui.KeyboardPanel {
         id: panel
@@ -308,7 +456,7 @@ Ui.Panel {
                                 focusable: true
                                 enabled: !root.busy && !!urlInput.text.trim()
                                 onClicked: if (enabled)
-                                    root.send("connect", urlInput.text, tokenInput.text)
+                                    root.connect(urlInput.text, tokenInput.text)
                             }
                             Ui.Button {
                                 width: connectButton.width
@@ -320,7 +468,7 @@ Ui.Panel {
                                 focusable: true
                                 onClicked: {
                                     tokenInput.text = "";
-                                    root.send("forget");
+                                    root.forget();
                                 }
                             }
                         }
@@ -394,7 +542,7 @@ Ui.Panel {
                         Label {
                             width: parent.width
                             visible: !!root.state.warning
-                            text: root.state.warning || ""
+                            text: root.state.warning ? root.t(root.state.warning) : ""
                             opacity: 0.7
                             font.pixelSize: Style.font.caption
                         }
