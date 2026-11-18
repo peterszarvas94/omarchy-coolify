@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.peterszarvas94.coolify",
   "name": "Coolify Deployments",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Peter Szarvas",
   "license": "MIT",
   "description": "Ongoing and last finished Coolify deployments, right in the Omarchy bar.",

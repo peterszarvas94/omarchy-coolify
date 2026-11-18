@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.0 — 2026-11-18
+
+- No more Go: the helper is rewritten in QML and JavaScript and runs inside the Omarchy shell. Nothing to install besides the plugin.
+- Notifications are deduplicated across monitors in memory; the notification history file is gone.
+- Shorter README.
+
 ## 0.2.0 — 2026-11-18
 
 - Add desktop notifications for deployment start, success, failure, cancellation and skipped results.
@@ -17,5 +23,3 @@ Initial public release.
 - Coolify Cloud or self-hosted URL and token setup using read-only API requests and private local credential storage.
 - Application filtering, adaptive background refresh, deployment links and stale-data handling.
 - Header refresh switch, URL-row connection settings, aligned footer actions and light/dark rendering.
-
-Requires current Omarchy, Go 1.23 or later, and util-linux `flock`.
