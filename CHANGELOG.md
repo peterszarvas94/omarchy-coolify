@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0 — Unreleased
+
+- Add desktop notifications for deployment start, success, failure, cancellation and skipped results.
+- Add an independent notification setting, click-through deployment actions and duplicate suppression across monitors.
+- Keep startup and reconnects silent instead of replaying old deployment history.
+
 ## 0.1.0 — 2026-11-18
 
 Initial public release.

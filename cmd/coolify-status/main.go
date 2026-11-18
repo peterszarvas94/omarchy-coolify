@@ -23,10 +23,12 @@ type Config struct {
 	Token string `json:"token"`
 }
 type Command struct {
-	Action string `json:"action"`
-	URL    string `json:"url"`
-	Token  string `json:"token"`
-	Filter string `json:"filter"`
+	Notifications      *bool             `json:"notifications"`
+	NotificationLabels map[string]string `json:"notificationLabels"`
+	Action             string            `json:"action"`
+	URL                string            `json:"url"`
+	Token              string            `json:"token"`
+	Filter             string            `json:"filter"`
 }
 type Deployment struct {
 	ApplicationID json.Number `json:"application_id"`
@@ -53,6 +55,7 @@ type App struct {
 	} `json:"environment"`
 }
 type State struct {
+	recent     []Deployment
 	Configured bool         `json:"configured"`
 	URL        string       `json:"url"`
 	Active     []Deployment `json:"active"`
@@ -65,11 +68,12 @@ type State struct {
 
 var identifier = regexp.MustCompile(`^[a-zA-Z0-9_-]{1,128}$`)
 var historyCache struct {
-	key   string
-	queue string
-	at    time.Time
-	last  *Deployment
-	apps  map[string]App
+	key    string
+	queue  string
+	at     time.Time
+	last   *Deployment
+	apps   map[string]App
+	recent []Deployment
 }
 
 // /applications omits project links on some Coolify releases. Resolve the
@@ -314,6 +318,7 @@ func refreshPolicy(c Config, filter string, force bool) State {
 	useCache := !force && historyCache.key == cacheKey && historyCache.queue == queueKey && time.Since(historyCache.at) < 30*time.Second
 	if useCache {
 		s.Last = historyCache.last
+		s.recent = historyCache.recent
 	}
 	var apps []App
 	if e := request(ctx, c, "/applications", &apps); e != nil {
@@ -355,6 +360,7 @@ func refreshPolicy(c Config, filter string, force bool) State {
 			slots <- struct{}{}
 			defer func() { <-slots }()
 			var candidate *Deployment
+			recent := []Deployment{}
 			localIDs := map[string]App{}
 			warning := ""
 			for page := 0; page < 20; page++ {
@@ -375,6 +381,9 @@ func refreshPolicy(c Config, filter string, force bool) State {
 					}
 					d = decorate(d, a, c)
 					if terminal(d.Status) {
+						if end(d).After(time.Now().Add(-2*time.Minute)) && len(recent) < 100 {
+							recent = append(recent, d)
+						}
 						if candidate == nil || end(d).After(end(*candidate)) {
 							copy := d
 							candidate = &copy
@@ -390,6 +399,9 @@ func refreshPolicy(c Config, filter string, force bool) State {
 			}
 			mu.Lock()
 			defer mu.Unlock()
+			if len(s.recent) < 2000 {
+				s.recent = append(s.recent, recent[:min(len(recent), 2000-len(s.recent))]...)
+			}
 			for id, app := range localIDs {
 				applicationIDs[id] = app
 			}
@@ -438,6 +450,7 @@ func refreshPolicy(c Config, filter string, force bool) State {
 		historyCache.at = time.Now()
 		historyCache.last = s.Last
 		historyCache.apps = ids
+		historyCache.recent = s.recent
 	}
 	return s
 }
@@ -487,12 +500,15 @@ func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	scanner.Buffer(make([]byte, 4096), 16384)
 	encoder := json.NewEncoder(os.Stdout)
+	tracker := notificationTracker{}
 	for scanner.Scan() {
 		var cmd Command
 		if json.Unmarshal(scanner.Bytes(), &cmd) != nil {
 			_ = encoder.Encode(State{Error: "Invalid command."})
 			continue
 		}
-		_ = encoder.Encode(handle(cmd))
+		state := handle(cmd)
+		tracker.process(cmd, &state)
+		_ = encoder.Encode(state)
 	}
 }

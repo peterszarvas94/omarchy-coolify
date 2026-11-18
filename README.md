@@ -8,7 +8,7 @@ Uses Omarchy's native panel, controls, typography, theme colors, keyboard focus 
 
 ## Install
 
-Requires current Omarchy with its Quickshell plugin system (`qs.Ui.KeyboardPanel`, `PanelHero`, `Button`, and `Commons.Translations`), Go 1.23 or later, and `flock` from util-linux. No Coolify CLI or extra Go dependencies are needed.
+Requires current Omarchy with its Quickshell plugin system (`qs.Ui.KeyboardPanel`, `PanelHero`, `Button`, and `Commons.Translations`), Go 1.23 or later, `flock` from util-linux, and libnotify (`notify-send`). No Coolify CLI or extra Go dependencies are needed.
 
 ```sh
 omarchy plugin add https://github.com/peterszarvas94/omarchy-coolify.git --enable
@@ -57,6 +57,16 @@ Connection settings let you change the URL or token. A blank token retains the c
 Background refresh defaults to every 30 seconds while idle and every 5 seconds while deploying. History is cached for up to 30 seconds while the queue is unchanged; queue transitions and manual refresh check it immediately. Use the header switch to disable background refresh and check only on opening or manual refresh. Connection failures back off to 60 seconds and preserve the last known result with a stale-data message.
 
 In Omarchy's widget settings, **Watched application UUIDs** accepts a comma-separated list. Empty watches all visible applications. Credentials are shared across this computer's monitors; each monitor owns its panel state.
+
+## Deployment notifications
+
+Notifications are enabled by default. Change **Deployment notifications** in the connection settings or Omarchy widget settings. The header switch continues to control background refresh separately: automatic notifications require background refresh; manual refresh can detect transitions too.
+
+A deployment entering `in_progress` sends a start notification. Finished, failed, cancelled and skipped deployments send their corresponding result, with duration when available. Click a notification to open that deployment in Coolify. Failures use critical urgency; other events use normal urgency. Omarchy controls delivery and quiet-mode behavior. No per-deployment notification is sent just for entering the queue. A fast deployment that starts and finishes between checks sends its result without inventing a start alert.
+
+The first successful check after startup, connection changes, notification re-enabling, or a failed check establishes a silent baseline. Checks more than 90 seconds apart also reset the baseline to avoid replaying an outage backlog. Notifications are deduplicated across monitors using a private ledger in `/omarchy-coolify` (default `~/.local/state/omarchy-coolify`). It stores hashed connection identifiers, deployment UUIDs, statuses and timestamps, not API tokens, application names or notification bodies. Entries are bounded and aged out on later checks.
+
+`notify-send` is provided by libnotify and normally ships with Omarchy. There are no extra Go module dependencies. The purple notification icon is derived from the same licensed Coolify mark.
 
 ## Limits and troubleshooting
 

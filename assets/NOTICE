@@ -3,3 +3,5 @@ Source: https://github.com/coollabsio/coolify/blob/v4.x/public/coolify-logo-mono
 Retrieved 2026-11-18. Path used unchanged; painted at runtime to follow the Omarchy theme.
 Upstream code is licensed under Apache-2.0 (see LICENSE-Coolify).
 Coolify is a trademark of its respective owner. This is an independent community plugin, not an official Coolify product.
+
+coolify-notification.svg uses the same path with a purple fill for visibility in desktop notifications.
