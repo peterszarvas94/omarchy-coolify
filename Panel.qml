@@ -1,4 +1,6 @@
+pragma ComponentBehavior: Bound
 import QtQuick
+import QtQuick.Window
 import QtQuick.Controls as QQC
 import Quickshell
 import Quickshell.Io
@@ -9,9 +11,9 @@ import qs.Ui as Ui
 Ui.Panel {
     id: root
     moduleName: "io.github.peterszarvas94.coolify"
-    ipcTarget: moduleName
-    implicitWidth: button.implicitWidth
-    implicitHeight: button.implicitHeight
+    manageIpc: false
+    property Item anchorItem: null
+    property Item hostWidget: null
     property var state: ({
             configured: false,
             active: [],
@@ -81,6 +83,24 @@ Ui.Panel {
     function refresh() {
         send("refresh");
     }
+    function moveFocus(direction) {
+        var current = keyCatcher.Window.window ? keyCatcher.Window.window.activeFocusItem : keyCatcher;
+        var next = (current || keyCatcher).nextItemInFocusChain(direction > 0);
+        if (next)
+            next.forceActiveFocus(Qt.TabFocusReason);
+    }
+    function activateFocus() {
+        var current = keyCatcher.Window.window ? keyCatcher.Window.window.activeFocusItem : null;
+        if (!current || !current.enabled)
+            return;
+        if (typeof current.clicked === "function")
+            current.clicked();
+        else if (typeof current.toggled === "function" && current.interactive)
+            current.toggled();
+    }
+    function switchPanel(direction) {
+        return root.bar && typeof root.bar.switchPanelFrom === "function" ? root.bar.switchPanelFrom(root.hostWidget || root, direction) : false;
+    }
     function openLink(link) {
         if (link)
             Qt.openUrlExternally(link);
@@ -149,41 +169,28 @@ Ui.Panel {
             }
         }
     }
-    Ui.BarIconButton {
-        id: button
-        anchors.fill: parent
-        bar: root.bar
-        iconComponent: Component {
-            CoolifyIcon {
-                anchors.centerIn: parent
-                width: Style.bar.iconSize
-                height: width
-                foreground: root.barForeground
-                status: root.error ? "offline" : (root.active.length ? "active" : (root.failed ? "failed" : "idle"))
-            }
-        }
-        foreground: root.failed || root.error ? Commons.Color.urgent : root.barForeground
-        labelText: root.active.length ? String(root.active.length) : ""
-        fixedWidth: vertical ? -1 : Style.bar.iconSlot + (labelText ? Style.space(18) : 0)
-        onPressed: function (code) {
-            if (code === Qt.MiddleButton)
-                root.refresh();
-            else
-                root.toggle();
-        }
-    }
     Ui.KeyboardPanel {
         id: panel
-        anchorItem: button
-        owner: root
+        anchorItem: root.anchorItem
+        owner: root.hostWidget || root
         bar: root.bar
         open: root.opened
-        focusTarget: root.editing ? urlInput : refreshButton
+        focusTarget: keyCatcher
+
         contentWidth: fittedContentWidth(Style.space(390))
         contentHeight: fittedContentHeight(column.implicitHeight + footer.implicitHeight + Style.space(12), Style.space(640))
-        Item {
+        Ui.PanelKeyCatcher {
+            id: keyCatcher
             anchors.fill: parent
-            Keys.onEscapePressed: root.close()
+            blocked: urlInput.activeFocus || tokenInput.activeFocus
+            onCloseRequested: root.close()
+            onTabRequested: function (direction) {
+                root.moveFocus(direction);
+            }
+            onMoveRequested: function (dx, dy) {
+                root.moveFocus(dy || dx);
+            }
+            onActivateRequested: root.activateFocus()
             QQC.ScrollView {
                 id: scroll
                 anchors.fill: parent
@@ -266,6 +273,7 @@ Ui.Panel {
                         }
                         Ui.TextField {
                             id: urlInput
+                            Keys.onEscapePressed: root.close()
                             width: parent.width
                             placeholderText: "https://coolify.example.com"
                             text: root.state.url || ""
@@ -274,6 +282,7 @@ Ui.Panel {
                         }
                         Ui.TextField {
                             id: tokenInput
+                            Keys.onEscapePressed: root.close()
                             width: parent.width
                             placeholderText: root.state.configured ? root.t("keepToken") : root.t("apiToken")
                             password: true
