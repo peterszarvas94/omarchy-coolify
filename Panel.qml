@@ -52,6 +52,17 @@ Ui.Panel {
         } else
             worker.running = true;
     }
+    function toggleBackground() {
+        if (!root.state.configured || !root.bar || !root.bar.shell)
+            return;
+        var entry = {
+            id: root.moduleName
+        };
+        for (var key in root.settings)
+            entry[key] = root.settings[key];
+        entry.backgroundRefresh = !root.autoRefresh;
+        root.bar.shell.updateEntryInline(root.moduleName, entry);
+    }
     function refresh() {
         send("refresh");
     }
@@ -172,7 +183,6 @@ Ui.Panel {
                         width: parent.width
                         title: "Coolify"
                         meta: root.editing ? root.t("connection") : (root.active.length ? root.t("deploying") : root.t("deployments"))
-                        detail: root.busy ? root.t("refreshing") : (root.active.length ? String(root.active.length) : "")
                         iconComponent: Component {
                             CoolifyIcon {
                                 width: Style.space(32)
@@ -180,15 +190,47 @@ Ui.Panel {
                             }
                         }
                         trailingControl: Component {
-                            Ui.PanelActionButton {
-                                iconText: "󰒓"
-                                tooltipText: root.t("connection")
-                                focusable: true
-                                onClicked: {
-                                    root.editing = !root.editing;
-                                    urlInput.text = root.state.url || "";
-                                    tokenInput.text = "";
+                            Ui.ToggleSwitch {
+                                id: refreshToggle
+                                anchors.verticalCenter: parent.verticalCenter
+                                checked: root.autoRefresh
+                                interactive: root.state.configured
+                                activeFocusOnTab: true
+                                hasCursor: activeFocus
+                                onToggled: root.toggleBackground()
+                                Keys.onSpacePressed: root.toggleBackground()
+                                Keys.onReturnPressed: root.toggleBackground()
+                                Accessible.name: root.t("background")
+                                Ui.PanelToolTip {
+                                    visible: refreshToggle.containsMouse
+                                    text: root.t("background") + "\n" + root.t("pollHelp")
                                 }
+                            }
+                        }
+                    }
+                    Row {
+                        id: instanceRow
+                        visible: root.state.configured
+                        width: parent.width
+                        spacing: Style.space(8)
+                        Label {
+                            width: parent.width - connectionButton.width - parent.spacing
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.state.url || ""
+                            maximumLineCount: 1
+                            elide: Text.ElideMiddle
+                            opacity: 0.55
+                            font.pixelSize: Style.font.caption
+                        }
+                        Ui.PanelActionButton {
+                            id: connectionButton
+                            iconText: "󰒓"
+                            tooltipText: root.t("connection")
+                            focusable: true
+                            onClicked: {
+                                root.editing = !root.editing;
+                                urlInput.text = root.state.url || "";
+                                tokenInput.text = "";
                             }
                         }
                     }
@@ -272,14 +314,7 @@ Ui.Panel {
                         width: parent.width
                         visible: root.state.configured && !root.editing
                         spacing: Style.space(10)
-                        Label {
-                            width: parent.width
-                            text: root.state.url || ""
-                            maximumLineCount: 1
-                            elide: Text.ElideMiddle
-                            opacity: 0.55
-                            font.pixelSize: Style.font.caption
-                        }
+
                         Ui.PanelSeparator {
                             width: parent.width
                         }
@@ -334,23 +369,6 @@ Ui.Panel {
                         }
                         Ui.PanelSeparator {
                             width: parent.width
-                        }
-                        Ui.Toggle {
-                            width: parent.width
-                            label: root.t("background")
-                            description: root.t("pollHelp")
-                            checked: root.autoRefresh
-                            onClicked: {
-                                if (root.bar && root.bar.shell) {
-                                    var entry = {
-                                        id: root.moduleName
-                                    };
-                                    for (var key in root.settings)
-                                        entry[key] = root.settings[key];
-                                    entry.backgroundRefresh = !root.autoRefresh;
-                                    root.bar.shell.updateEntryInline(root.moduleName, entry);
-                                }
-                            }
                         }
                         Label {
                             width: parent.width

@@ -8,6 +8,7 @@ A local, read-only Coolify-shaped API fixture supplied sample deployments. These
 
 - Coolify mark and active count fit the native bar slot.
 - Header, separators, input fields and footer share their expected panel insets.
+- Background refresh uses the top-right header switch; the connection gear aligns with the instance URL. The boxed deployment count and large refresh settings row are removed.
 - Refresh/Open Coolify have equal widths and heights. Connection action buttons have equal widths when both are present.
 - Footer actions stay visible while long content scrolls.
 - Setup, running, idle, failed and disconnected states render without plugin QML runtime errors.

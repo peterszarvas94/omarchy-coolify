@@ -38,7 +38,7 @@ Connection settings let you change the URL or token. A blank token retains the c
 - Middle-click the icon or use **Refresh** for an immediate check.
 - Tab/Shift+Tab moves between controls, Enter/Space activates, Escape closes, and the mouse wheel scrolls long lists.
 
-Background refresh defaults to every 30 seconds while idle and every 5 seconds while deploying. History is cached for up to 30 seconds while the queue is unchanged; queue transitions and manual refresh check it immediately. Disable background refresh to check only on opening or manual refresh. Connection failures back off to 60 seconds and preserve the last known result with a stale-data message.
+Background refresh defaults to every 30 seconds while idle and every 5 seconds while deploying. History is cached for up to 30 seconds while the queue is unchanged; queue transitions and manual refresh check it immediately. Use the header switch to disable background refresh and check only on opening or manual refresh. Connection failures back off to 60 seconds and preserve the last known result with a stale-data message.
 
 In Omarchy's widget settings, **Watched application UUIDs** accepts a comma-separated list. Empty watches all visible applications. Credentials are shared across this computer's monitors; each monitor owns its panel state.
 
