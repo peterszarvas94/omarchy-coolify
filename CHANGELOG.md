@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4 — 2026-11-18
+
+- Serialize connection changes across monitors and invalidate pending saves on Disconnect.
+
 ## 0.3.3 — 2026-11-18
 
 - Limit deployment alerts to one outstanding notification across refreshes and monitors.

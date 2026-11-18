@@ -28,6 +28,7 @@ Ui.Panel {
     property bool busy: false
     property bool editing: false
     property string error: ""
+    property string expectedGeneration: ""
     property string saving: ""
     property string pendingSave: ""
     property double now: Date.now()
@@ -74,7 +75,7 @@ Ui.Panel {
         runTimeout.restart();
     }
     function refresh(force) {
-        if (busy || !connection)
+        if (busy || saving || !connection)
             return;
         var conn = connection;
         var watched = filter;
@@ -120,7 +121,7 @@ Ui.Panel {
             Qt.callLater(root.refresh);
     }
     function connect(urlText, tokenText) {
-        if (busy)
+        if (busy || saving)
             return;
         var normalized = Coolify.normalizeUrl(urlText);
         if (normalized.error) {
@@ -134,6 +135,8 @@ Ui.Panel {
             error = t("errorToken");
             return;
         }
+        generationFile.reload();
+        var generation = generationFile.text().trim();
         var conn = {
             url: normalized.url,
             token: token
@@ -146,11 +149,12 @@ Ui.Panel {
                 root.error = root.message(err);
                 return;
             }
+            root.expectedGeneration = generation;
             root.save("connect", JSON.stringify(conn) + "\n");
         }));
     }
     function forget() {
-        if (!busy)
+        if (!busy && !saving)
             save("forget", "");
     }
     // GET over curl: redirects are refused, so the token never leaves the configured
@@ -181,7 +185,7 @@ Ui.Panel {
         if (!saving)
             return;
         var kind = saving;
-        var content = pendingSave;
+
         saving = "";
         pendingSave = "";
         busy = false;
@@ -194,7 +198,7 @@ Ui.Panel {
             tokenInput.text = "";
         }
         // Apply what was written; other bar instances pick it up through the file watch.
-        loadConnection(content);
+        connectionFile.reload();
     }
     function notify(conn, watched, next) {
         var key = conn.url + "\n" + conn.token + "\n" + watched;
@@ -284,14 +288,20 @@ Ui.Panel {
         onLoadFailed: root.loadConnection("")
         onFileChanged: reload()
     }
+    FileView {
+        id: generationFile
+        path: root.configDir + "/generation"
+        blockLoading: true
+        printErrors: false
+    }
     // $1 config directory, $2 connection file, $3 "forget" or "connect"; the connection is one line on stdin.
-    readonly property string writeScript: "umask 077\n" + "if [ -L \"$1\" ] || { [ -e \"$1\" ] && [ ! -d \"$1\" ]; }; then exit 1; fi\n" + "mkdir -p -- \"$1\" && [ -O \"$1\" ] && chmod 700 -- \"$1\" || exit 1\n" + "if [ \"$3\" = forget ]; then rm -f -- \"$2\"; exit; fi\n" + "IFS= read -r line || exit 1\n" + "tmp=$(mktemp -- \"$1/.connection.XXXXXX\") || exit 1\n" + "printf '%s\\n' \"$line\" > \"$tmp\" && mv -fT -- \"$tmp\" \"$2\" && exit 0\n" + "rm -f -- \"$tmp\"\n" + "exit 1\n"
+    readonly property string writeScript: "set -eu\numask 077\ndir=$1\nfile=$2\n[ ! -L \"$dir\" ]\nmkdir -p -- \"$dir\"\n[ -O \"$dir\" ]\nchmod 700 -- \"$dir\"\nexec 9< \"$dir\"\nflock -x 9\nif [ \"$3\" = forget ]; then\n    tmp=$(mktemp -- \"$dir/.generation.XXXXXX\")\n    trap 'rm -f -- \"$tmp\"' EXIT\n    cat /proc/sys/kernel/random/uuid > \"$tmp\"\n    mv -fT -- \"$tmp\" \"$dir/generation\"\n    rm -f -- \"$file\"\n    exit 0\nfi\ngeneration=\nif [ -e \"$dir/generation\" ]; then\n    IFS= read -r generation < \"$dir/generation\"\nfi\n[ \"$4\" = \"$generation\" ]\nIFS= read -r line\ntmp=$(mktemp -- \"$dir/.connection.XXXXXX\")\ntrap 'rm -f -- \"$tmp\"' EXIT\nprintf '%s\\n' \"$line\" > \"$tmp\"\nmv -fT -- \"$tmp\" \"$file\"\n"
     // $1 URL, $2 allowed protocol; the token is one line on stdin. -q skips ~/.curlrc,
     // which could otherwise turn redirects back on. Prints the body, then "<HTTP status> <curl exit>".
     readonly property string fetchScript: "IFS= read -r token || exit 1\n" + "printf 'Authorization: Bearer %s\\n' \"$token\" | curl -q -s --proto \"$2\" --max-redirs 0 --connect-timeout 10 --max-time 25 --max-filesize 4M -H @- -H 'Accept: application/json' -o - -w '\\n%{http_code}' -- \"$1\" 2>/dev/null\n" + "printf ' %s\\n' \"$?\"\n"
     Process {
         id: writer
-        command: ["sh", "-c", root.writeScript, "sh", root.configDir, connectionFile.path, root.saving]
+        command: ["sh", "-c", root.writeScript, "sh", root.configDir, connectionFile.path, root.saving, root.expectedGeneration]
         stdinEnabled: true
         onStarted: if (root.pendingSave)
             write(root.pendingSave)
