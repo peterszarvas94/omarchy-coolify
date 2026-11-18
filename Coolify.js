@@ -72,8 +72,11 @@ function decorate(d, app, conn) {
 }
 
 // One refresh run. abort() stops every request still in flight.
-function Run(conn, done) {
+// fetch(url, token, done(exitCode, httpStatus, body)) returns { abort() }; the
+// panel runs it with curl so redirects are refused and response size is capped.
+function Run(conn, fetch, done) {
     this.conn = conn;
+    this.fetch = fetch;
     this.done = done;
     this.requests = [];
     this.finished = false;
@@ -101,33 +104,48 @@ Run.prototype.cancel = function () {
 };
 Run.prototype.get = function (path, callback) {
     var run = this;
-    var xhr = new XMLHttpRequest();
-    xhr.onreadystatechange = function () {
-        if (xhr.readyState !== XMLHttpRequest.DONE || run.finished)
+    var request = run.fetch(run.conn.url + "/api/v1" + path, run.conn.token, function (exit, status, body) {
+        if (run.finished)
             return;
-        var index = run.requests.indexOf(xhr);
+        var index = run.requests.indexOf(request);
         if (index >= 0)
             run.requests.splice(index, 1);
-        if (xhr.status === 401 || xhr.status === 403)
-            return callback({ key: "errorAccess" });
-        if (xhr.status === 0)
+        if (exit === 63)
+            return callback({ key: "errorTooLarge" });
+        if (exit !== 0 || !status)
             return callback({ key: "errorUnreachable" });
-        if (xhr.status !== 200)
-            return callback({ key: "errorHttp", arg: xhr.status });
+        if (status === 401 || status === 403)
+            return callback({ key: "errorAccess" });
+        if (status >= 300 && status < 400)
+            return callback({ key: "errorRedirect" });
+        if (status !== 200)
+            return callback({ key: "errorHttp", arg: status });
         var data;
         try {
-            data = JSON.parse(xhr.responseText);
+            data = JSON.parse(body);
         } catch (e) {
             return callback({ key: "errorResponse" });
         }
         callback(null, data);
-    };
-    xhr.open("GET", run.conn.url + "/api/v1" + path);
-    xhr.setRequestHeader("Authorization", "Bearer " + run.conn.token);
-    xhr.setRequestHeader("Accept", "application/json");
-    run.requests.push(xhr);
-    xhr.send();
+    });
+    if (request)
+        run.requests.push(request);
 };
+
+// Splits curl output written with -w '\n%{http_code} ' followed by its exit code.
+function parseFetch(output) {
+    var text = String(output || "").replace(/\n$/, "");
+    var split = text.lastIndexOf("\n");
+    var m = /^(\d{3}) (\d+)$/.exec(text.substring(split + 1));
+    if (split < 0 || !m)
+        return { exit: 1, status: 0, body: "" };
+    return { exit: Number(m[2]), status: Number(m[1]), body: text.substring(0, split) };
+}
+
+// curl --proto value: plain HTTP only for the localhost exception.
+function protocols(url) {
+    return /^https:/.test(url) ? "=https" : "=http";
+}
 
 // Runs task(item, next) over items with at most four requests at a time.
 function each(items, task, done) {
@@ -163,8 +181,8 @@ function list(value) {
 var cache = { key: "", queue: "", at: 0, apps: {}, last: null, recent: [] };
 
 // Checks only whether the token can read applications.
-function verify(conn, done) {
-    var run = new Run(conn, done);
+function verify(conn, fetch, done) {
+    var run = new Run(conn, fetch, done);
     run.get("/applications", function (error) {
         run.finish(error ? error : null);
     });
@@ -172,8 +190,8 @@ function verify(conn, done) {
 }
 
 // done(error, state). A poll reuses history while the deployment queue is unchanged.
-function refresh(conn, filter, force, done) {
-    var run = new Run(conn, done);
+function refresh(conn, fetch, filter, force, done) {
+    var run = new Run(conn, fetch, done);
     var selected = {};
     var selectedCount = 0;
     String(filter || "").split(",").forEach(function (id) {
@@ -188,7 +206,7 @@ function refresh(conn, filter, force, done) {
     run.get("/deployments", function (error, queueData) {
         if (error)
             return run.finish(error);
-        var queue = list(queueData).filter(function (d) { return d && ID.test(d.deployment_uuid || ""); });
+        var queue = list(queueData).filter(function (d) { return d && ID.test(d.deployment_uuid || ""); }).slice(0, 500);
         var queueKey = queue.map(function (d) { return d.deployment_uuid + ":" + d.status; }).sort().join(",");
         var cacheKey = conn.url + "\n" + conn.token + "\n" + filter;
         var cached = !force && cache.key === cacheKey && cache.queue === queueKey && Date.now() - cache.at < 30000;
