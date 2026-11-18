@@ -1,0 +1,6 @@
+*.log
+connection.json
+.env
+.env.*
+/coolify-status
+!bin/coolify-status

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.peterszarvas94.coolify",
+  "name": "Coolify Deployments",
+  "version": "0.1.0",
+  "author": "Peter Szarvas",
+  "license": "MIT",
+  "description": "Ongoing and last finished Coolify deployments, right in the Omarchy bar.",
+  "homepage": "https://github.com/peterszarvas94/omarchy-coolify",
+  "kinds": ["bar-widget"],
+  "entryPoints": {"barWidget": "Panel.qml"},
+  "barWidget": {
+    "displayName": "Coolify Deployments",
+    "description": "Watch deployments. Configure your instance and read-only token in the panel.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {"backgroundRefresh": true, "applicationUUIDs": ""},
+    "schema": [
+      {"key": "backgroundRefresh", "type": "boolean", "label": "Refresh in background", "description": "Poll Coolify every 30 seconds, or every 5 seconds during deployments.", "defaultValue": true},
+      {"key": "applicationUUIDs", "type": "string", "label": "Watched application UUIDs", "description": "Comma-separated UUIDs. Leave empty to watch every application visible to the token.", "defaultValue": ""}
+    ]
+  }
+}
