@@ -80,6 +80,28 @@ For access errors, check API access, read permission, team/resources and allowed
 
 English translations are included and follow Omarchy's fallback system. Additional languages can be added under `i18n/`. Status codes and helper diagnostics currently use English.
 
+## Runtime and dependencies
+
+The manifest loads `BarWidget.qml`, which extends `qs.Ui.BarWidget`. It loads `Panel.qml` inside the existing Omarchy process and forwards its open, close, toggle and popout-switch lifecycle. The panel uses `KeyboardPanel` and `PanelKeyCatcher`; there is no separate panel registration or private global IPC target.
+
+The plugin does not start Quickshell, install a background service, run install hooks, invoke SSH, or request administrator privileges. It launches one local Go helper per bar instance. Periodic API reads happen only while background refresh is enabled; setup and manual refresh can also make API requests. The helper is compiled locally from this repository, with standard-library dependencies only. No remote build, downloaded executable or installer is used.
+
+External commands used at runtime:
+
+| Provider | Commands | Purpose |
+| --- | --- | --- |
+| Bash | `bash` | Helper launcher |
+| Go 1.23+ | `go` | Local helper build on first use or source changes |
+| util-linux | `flock` | Serialize local builds |
+| findutils | `find`, `xargs` | Find helper sources for the build fingerprint |
+| coreutils | `mkdir`, `sort`, `sha256sum`, `cut`, `cat`, `mv` | Build cache and source fingerprint |
+| libnotify | `notify-send` | Native desktop notifications and action delivery |
+| xdg-utils | `xdg-open` | Open a deployment when its notification is activated |
+
+Git and Omarchy's CLI manage installation, updating and removal. Other than Go, these command providers normally ship with Omarchy. All helper files and notification history are stored in the user-owned paths documented above. The only routine network destination is the Coolify URL explicitly configured by the user.
+
+See the [publishing audit](docs/publishing-audit.md) for the checklist against the [Omarchy development guide](https://plugins.omarchy.org/develop.html).
+
 ## Development
 
 ```sh
@@ -95,10 +117,10 @@ For QML linting, expose host modules under the `qs` namespace:
 mkdir -p /tmp/omarchy-coolify-imports/qs
 ln -sfn /usr/share/omarchy/shell/Commons /tmp/omarchy-coolify-imports/qs/Commons
 ln -sfn /usr/share/omarchy/shell/Ui /tmp/omarchy-coolify-imports/qs/Ui
-/usr/lib/qt6/bin/qmllint -I /tmp/omarchy-coolify-imports -I /usr/lib/qt6/qml Panel.qml DeploymentRow.qml Label.qml CoolifyIcon.qml
+/usr/lib/qt6/bin/qmllint --missing-property info -I /tmp/omarchy-coolify-imports -I /usr/lib/qt6/qml BarWidget.qml Panel.qml DeploymentRow.qml Label.qml CoolifyIcon.qml
 ```
 
-Lint may report dynamic `Style.font` and `bar.shell` members as unknown; these are supplied by the host. Copy fresh source into the installed plugin directory, run `omarchy restart shell`, and confirm `omarchy-shell shell ping`. Never edit packaged Omarchy files.
+The lint command keeps dynamic host-property diagnostics at informational severity; syntax, import and other errors still fail. `Style.font` and `bar.shell` members are supplied by the host. The import aliases above expose Quickshell's runtime `qs` namespace to plain qmllint. Copy fresh source into the installed plugin directory, run `omarchy restart shell`, and confirm `omarchy-shell shell ping`. Never edit packaged Omarchy files.
 
 See [manual verification](docs/verification.md) for screenshots and release checks.
 
