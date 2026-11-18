@@ -24,6 +24,7 @@ The token is saved in `~/.config/omarchy-coolify/connection.json`, readable only
 
 - Click a deployment to open it in Coolify. Middle-click the bar icon to refresh.
 - The header switch turns background refresh on or off: every 30 seconds, or every 5 seconds while deploying.
+- Only one deployment alert is shown at a time. Further events update the panel while the alert is open. Failures take priority within a refresh.
 - Turn notifications off in the connection settings.
 - To watch only some applications, list their UUIDs, comma-separated, in the widget settings.
 

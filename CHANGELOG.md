@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.3 — 2026-11-18
+
+- Limit deployment alerts to one outstanding notification across refreshes and monitors.
+
 ## 0.3.2 — 2026-11-18
 
 - Each refresh reads at most 16 MiB of responses in total, besides the 4 MiB limit per response, and stops with an error when Coolify returns more.
