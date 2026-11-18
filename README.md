@@ -10,7 +10,7 @@ Ongoing and last finished Coolify deployments in your Omarchy bar, with desktop 
 omarchy plugin add https://github.com/peterszarvas94/omarchy-coolify.git --enable
 ```
 
-Nothing else to install. The plugin is plain QML and runs inside the Omarchy shell.
+Nothing else to install. The plugin is plain QML and runs inside the Omarchy shell; API requests use `curl`, which every Omarchy install has.
 
 ## Connect
 
@@ -18,7 +18,7 @@ Nothing else to install. The plugin is plain QML and runs inside the Omarchy she
 2. Enter your Coolify URL, such as `https://coolify.example.com`, or `https://app.coolify.io` for Coolify Cloud.
 3. In Coolify, enable API access and create a token with **read** permission under **Keys & Tokens → API tokens**. Paste it and select **Save & connect**.
 
-The token is saved in `~/.config/omarchy-coolify/connection.json`, readable only by you, and is sent only to the URL you entered. HTTPS is required, except on localhost.
+The token is saved in `~/.config/omarchy-coolify/connection.json`, readable only by you, and is sent only to the URL you entered: redirects are never followed and responses over 4 MiB are rejected. HTTPS is required, except on localhost.
 
 ## Use
 

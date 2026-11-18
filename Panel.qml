@@ -80,7 +80,7 @@ Ui.Panel {
         var watched = filter;
         busy = true;
         error = "";
-        startRun(Coolify.refresh(conn, watched, force !== false, function (err, next) {
+        startRun(Coolify.refresh(conn, root.fetch, watched, force !== false, function (err, next) {
             root.stopRun();
             if (err) {
                 root.error = root.message(err);
@@ -140,7 +140,7 @@ Ui.Panel {
         };
         busy = true;
         error = "";
-        startRun(Coolify.verify(conn, function (err) {
+        startRun(Coolify.verify(conn, root.fetch, function (err) {
             root.stopRun();
             if (err) {
                 root.error = root.message(err);
@@ -153,20 +153,29 @@ Ui.Panel {
         if (!busy)
             save("forget", "");
     }
-    // The file is created owner-only first; FileView then writes in place, so the
-    // token never appears in a process argument and the permissions are kept.
+    // GET over curl: redirects are refused, so the token never leaves the configured
+    // origin, and responses are capped at 4 MiB. The token goes over stdin, never argv.
+    function fetch(url, token, done) {
+        var request = fetcher.createObject(root, {
+            token: token,
+            done: done,
+            command: ["sh", "-c", root.fetchScript, "sh", url, Coolify.protocols(url)]
+        });
+        return {
+            abort: function () {
+                if (request)
+                    request.cancel();
+            }
+        };
+    }
+    // The connection is written to a fresh owner-only temporary file and renamed over
+    // connection.json, so an existing symlink or other file at that path is replaced,
+    // never written through. Disconnecting removes the path itself.
     function save(kind, content) {
-        // FileView skips writing unchanged text, so there would be no saved signal.
-        if (connectionFile.loaded && connectionFile.text() === content) {
-            saving = kind;
-            pendingSave = content;
-            saveFinished(true);
-            return;
-        }
         busy = true;
         saving = kind;
         pendingSave = content;
-        prepare.running = true;
+        writer.running = true;
     }
     function saveFinished(ok) {
         if (!saving)
@@ -266,22 +275,70 @@ Ui.Panel {
         id: connectionFile
         path: root.configDir + "/connection.json"
         watchChanges: true
-        atomicWrites: false
         printErrors: false
         onLoaded: root.loadConnection(text())
         onLoadFailed: root.loadConnection("")
         onFileChanged: reload()
-        onSaved: root.saveFinished(true)
-        onSaveFailed: root.saveFinished(false)
     }
+    // $1 config directory, $2 connection file, $3 "forget" or "connect"; the connection is one line on stdin.
+    readonly property string writeScript: "umask 077\n" + "if [ -L \"$1\" ] || { [ -e \"$1\" ] && [ ! -d \"$1\" ]; }; then exit 1; fi\n" + "mkdir -p -- \"$1\" && [ -O \"$1\" ] && chmod 700 -- \"$1\" || exit 1\n" + "if [ \"$3\" = forget ]; then rm -f -- \"$2\"; exit; fi\n" + "IFS= read -r line || exit 1\n" + "tmp=$(mktemp -- \"$1/.connection.XXXXXX\") || exit 1\n" + "printf '%s\\n' \"$line\" > \"$tmp\" && mv -fT -- \"$tmp\" \"$2\" && exit 0\n" + "rm -f -- \"$tmp\"\n" + "exit 1\n"
+    // $1 URL, $2 allowed protocol; the token is one line on stdin. -q skips ~/.curlrc,
+    // which could otherwise turn redirects back on. Prints the body, then "<HTTP status> <curl exit>".
+    readonly property string fetchScript: "IFS= read -r token || exit 1\n" + "printf 'Authorization: Bearer %s\\n' \"$token\" | curl -q -s --proto \"$2\" --max-redirs 0 --connect-timeout 10 --max-time 25 --max-filesize 4M -H @- -H 'Accept: application/json' -o - -w '\\n%{http_code}' -- \"$1\" 2>/dev/null\n" + "printf ' %s\\n' \"$?\"\n"
     Process {
-        id: prepare
-        command: ["sh", "-c", "umask 077 && mkdir -p \"$1\" && chmod 700 \"$1\" && touch \"$2\" && chmod 600 \"$2\"", "sh", root.configDir, connectionFile.path]
+        id: writer
+        command: ["sh", "-c", root.writeScript, "sh", root.configDir, connectionFile.path, root.saving]
+        stdinEnabled: true
+        onStarted: if (root.pendingSave)
+            write(root.pendingSave)
         onExited: function (code) {
-            if (code === 0)
-                connectionFile.setText(root.pendingSave);
-            else
-                root.saveFinished(false);
+            root.saveFinished(code === 0);
+        }
+    }
+    Component {
+        id: fetcher
+        Process {
+            id: request
+            property string token: ""
+            property var done: null
+            property bool cancelled: false
+            property bool streamDone: false
+            property bool exitDone: false
+            running: true
+            stdinEnabled: true
+            function cancel() {
+                cancelled = true;
+                if (running)
+                    running = false;
+                else
+                    destroy();
+            }
+            function settle() {
+                // A killed request may never finish its output stream.
+                if (!exitDone || (!streamDone && !cancelled))
+                    return;
+                if (!cancelled) {
+                    cancelled = true;
+                    var result = Coolify.parseFetch(output.text);
+                    done(result.exit, result.status, result.body);
+                }
+                destroy();
+            }
+            onStarted: {
+                write(token + "\n");
+                token = "";
+            }
+            stdout: StdioCollector {
+                id: output
+                onStreamFinished: {
+                    request.streamDone = true;
+                    request.settle();
+                }
+            }
+            onExited: {
+                exitDone = true;
+                settle();
+            }
         }
     }
     Component {

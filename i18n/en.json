@@ -38,6 +38,8 @@
   "errorHttp": "Coolify returned HTTP %1.",
   "errorResponse": "Unexpected Coolify response. Check the instance URL and API version.",
   "errorTooMany": "More than 200 applications; narrow the API token's scope.",
+  "errorTooLarge": "Coolify response is larger than 4 MiB; narrow the API token's scope.",
+  "errorRedirect": "Coolify answered with a redirect. Enter the final instance URL; the token is never sent to a redirect target.",
   "errorSave": "Could not save the connection file.",
   "warnHistory": "Some deployment history is unavailable.",
   "warnFilter": "Some watched application UUIDs are not visible to this token."

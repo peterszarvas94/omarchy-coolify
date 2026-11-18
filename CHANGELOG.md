@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.1 — 2026-11-18
+
+- API requests run through `curl` with redirects refused, so the token is never sent outside the configured Coolify origin.
+- Responses over 4 MiB are rejected before they are parsed, and the deployment queue is capped.
+- The connection file is written to a fresh owner-only temporary file and renamed into place, and Disconnect deletes it, so an existing symlink or other file at that path is never written through or re-permissioned. The config directory must be a real directory owned by you.
+- The token reaches `curl` and the file writer on stdin, never in process arguments.
+
 ## 0.3.0 — 2026-11-18
 
 - No more Go: the helper is rewritten in QML and JavaScript and runs inside the Omarchy shell. Nothing to install besides the plugin.
